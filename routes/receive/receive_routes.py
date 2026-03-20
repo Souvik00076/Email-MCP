@@ -38,7 +38,6 @@ class EmailDetailResponse(BaseModel):
 def handle_error(error_message: str, context: str):
     """Common error handling logic for receive routes"""
     logger.error(f"{context}: {error_message}")
-    
     if "configuration" in error_message.lower():
         return status.HTTP_503_SERVICE_UNAVAILABLE, "Configuration Error"
     elif "authentication" in error_message.lower():

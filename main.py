@@ -6,8 +6,7 @@ import uvicorn
 import logging
 
 # Import routers
-from routes import send_router, receive_router
-
+from routes import send_router, receive_router, auth_router
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,7 +50,7 @@ async def health_check():
 # Include routers
 app.include_router(send_router)
 app.include_router(receive_router)
-
+app.include_router(auth_router)
 
 # MCP Integration
 mcp = FastApiMCP(
