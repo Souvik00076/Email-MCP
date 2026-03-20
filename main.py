@@ -51,7 +51,8 @@ async def health_check():
     return HealthResponse(status="healthy", service="Email MCP Server")
 
 
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8002")
+
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_metadata():
@@ -67,7 +68,28 @@ async def oauth_metadata():
         "scopes_supported": ["email.read", "email.send"]
     })
 
+
+@app.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource():
+    """OAuth 2.0 Protected Resource Metadata (RFC 9728)"""
+    return JSONResponse({
+        "resource": f"{BASE_URL}/mcp",
+        "authorization_servers": [BASE_URL],
+        "scopes_supported": ["email.read", "email.send"]
+    })
+
+
+@app.get("/.well-known/oauth-protected-resource/mcp")
+async def oauth_protected_resource_mcp():
+    """OAuth 2.0 Protected Resource Metadata for MCP endpoint"""
+    return JSONResponse({
+        "resource": f"{BASE_URL}/mcp",
+        "authorization_servers": [BASE_URL],
+        "scopes_supported": ["email.read", "email.send"]
+    })
+
 security = HTTPBearer(auto_error=False)
+
 
 async def require_auth(
     credentials: HTTPAuthorizationCredentials | None = Depends(security)
@@ -81,8 +103,8 @@ async def require_auth(
     return credentials.credentials
 
 # Include routers
-app.include_router(send_router,dependencies=[Depends(require_auth)])
-app.include_router(receive_router,dependencies=[Depends(require_auth)])
+app.include_router(send_router, dependencies=[Depends(require_auth)])
+app.include_router(receive_router, dependencies=[Depends(require_auth)])
 app.include_router(auth_router)
 
 # MCP Integration

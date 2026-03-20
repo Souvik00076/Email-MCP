@@ -14,7 +14,7 @@ class OAuthUserInfo(BaseModel):
 
 class OAuthStrategy(ABC):
     @abstractmethod
-    def get_auth_url(self, state: str,scopes:str) -> str:
+    def get_auth_url(self, state: str) -> str:
         pass
 
     @abstractmethod
