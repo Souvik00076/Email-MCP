@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, EmailStr, ValidationError
 from typing import Optional, List
 import logging
-from core import SMTPEmailSender, EmailMessage
+from core import EmailSenderStrategy, SMTPEmailSender, EmailMessage
+from dependencies import AuthDep
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/send", tags=["Email Sending"])
 
 # Initialize email sender singleton
-email_sender = SMTPEmailSender()
 
 
 # Pydantic Models for Send Operations
@@ -28,9 +28,13 @@ class EmailResponse(BaseModel):
     email_id: Optional[str] = None
 
 
+email_user = "souvikfs06@gmail.com"
+
 # Routes
+
+
 @router.post("/email", response_model=EmailResponse)
-async def send_email(email: EmailRequest):
+async def send_email(email: EmailRequest, token=AuthDep):
     """
     Send an email via MCP server using SMTP.
     Supports CC and BCC recipients.
@@ -45,6 +49,7 @@ async def send_email(email: EmailRequest):
             cc=email.cc,
             bcc=email.bcc
         )
+        email_sender: EmailSenderStrategy = SMTPEmailSender(token, email_user)
         # Send email using singleton SMTP sender
         result = await email_sender.send_email(email_message)
         logger.info(f"Email sent successfully to: {email.to}")
@@ -82,11 +87,10 @@ async def send_email(email: EmailRequest):
 
 
 @router.get("/status")
-async def get_send_status():
-    """
-    Get the current status of the email sender (SMTP) configuration.
-    """
+async def get_send_status(token: AuthDep):
+
     try:
+        email_sender: EmailSenderStrategy = SMTPEmailSender(token, email_user)
         config_status = email_sender.get_configuration_status()
         return {
             "success": True,

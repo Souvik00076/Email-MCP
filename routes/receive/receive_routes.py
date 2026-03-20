@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Query
+from httpx import Auth
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import logging
-from core import IMAPEmailReceiver, EmailSummary, EmailDetail, FolderInfo
+from core import EmailReceiverStrategy, IMAPEmailReceiver, EmailSummary, EmailDetail, FolderInfo
+from dependencies import AuthDep
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +13,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/receive", tags=["Email Receiving"])
 
 # Initialize email receiver singleton
-email_receiver = IMAPEmailReceiver()
 
 
 # Pydantic Models for Receive Operations
@@ -34,7 +35,11 @@ class EmailDetailResponse(BaseModel):
     email: EmailDetail
 
 
+email_user = "souvikfs06@gmail.com"
+
 # Helper function for error handling
+
+
 def handle_error(error_message: str, context: str):
     """Common error handling logic for receive routes"""
     logger.error(f"{context}: {error_message}")
@@ -55,19 +60,29 @@ def handle_error(error_message: str, context: str):
 # Routes
 @router.get("/recent", response_model=EmailListResponse)
 async def get_recent_emails(
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of emails to return"),
-    offset: int = Query(default=0, ge=0, description="Number of emails to skip"),
-    from_date: Optional[datetime] = Query(default=None, description="Filter emails from this date (ISO format)"),
-    to_date: Optional[datetime] = Query(default=None, description="Filter emails until this date (ISO format)"),
-    folder: str = Query(default="INBOX", description="Folder to fetch emails from")
+    limit: int = Query(default=20, ge=1, le=100,
+                       description="Maximum number of emails to return"),
+    offset: int = Query(
+        default=0, ge=0, description="Number of emails to skip"),
+    from_date: Optional[datetime] = Query(
+        default=None, description="Filter emails from this date (ISO format)"),
+    to_date: Optional[datetime] = Query(
+        default=None, description="Filter emails until this date (ISO format)"),
+    folder: str = Query(
+        default="INBOX", description="Folder to fetch emails from"),
+    token: AuthDep = ""
 ):
     """
     Get recent emails with pagination and optional date filtering.
     Returns emails sorted by date (most recent first).
     """
     try:
-        logger.info(f"Fetching recent emails from {folder}, limit={limit}, offset={offset}")
-        
+        logger.info(f"Fetching recent emails from {
+                    folder}, limit={limit}, offset={offset}")
+        logger.info(f"[DEBUG] token (first 20 chars): {str(token)[:20]}...")
+
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            str(token), email_user)
         emails = await email_receiver.fetch_recent_emails(
             folder=folder,
             limit=limit,
@@ -75,9 +90,9 @@ async def get_recent_emails(
             from_date=from_date,
             to_date=to_date
         )
-        
+
         logger.info(f"Successfully fetched {len(emails)} emails")
-        
+
         return EmailListResponse(
             success=True,
             emails=emails,
@@ -87,28 +102,40 @@ async def get_recent_emails(
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, "Failed to fetch recent emails")
+        status_code, error_type = handle_error(
+            error_message, "Failed to fetch recent emails")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/unread", response_model=EmailListResponse)
 async def get_unread_emails(
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of emails to return"),
-    offset: int = Query(default=0, ge=0, description="Number of emails to skip"),
-    from_date: Optional[datetime] = Query(default=None, description="Filter emails from this date (ISO format)"),
-    to_date: Optional[datetime] = Query(default=None, description="Filter emails until this date (ISO format)"),
-    folder: str = Query(default="INBOX", description="Folder to fetch emails from")
+    limit: int = Query(default=20, ge=1, le=100,
+                       description="Maximum number of emails to return"),
+    offset: int = Query(
+        default=0, ge=0, description="Number of emails to skip"),
+    from_date: Optional[datetime] = Query(
+        default=None, description="Filter emails from this date (ISO format)"),
+    to_date: Optional[datetime] = Query(
+        default=None, description="Filter emails until this date (ISO format)"),
+    folder: str = Query(
+        default="INBOX", description="Folder to fetch emails from"),
+
+    token: AuthDep = ""
+
 ):
     """
     Get unread emails with pagination and optional date filtering.
     Returns only emails that have not been read (UNSEEN flag).
     """
     try:
-        logger.info(f"Fetching unread emails from {folder}, limit={limit}, offset={offset}")
-        
+        logger.info(f"Fetching unread emails from {
+                    folder}, limit={limit}, offset={offset}")
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         emails = await email_receiver.fetch_unread_emails(
             folder=folder,
             limit=limit,
@@ -116,9 +143,9 @@ async def get_unread_emails(
             from_date=from_date,
             to_date=to_date
         )
-        
+
         logger.info(f"Successfully fetched {len(emails)} unread emails")
-        
+
         return EmailListResponse(
             success=True,
             emails=emails,
@@ -128,21 +155,29 @@ async def get_unread_emails(
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, "Failed to fetch unread emails")
+        status_code, error_type = handle_error(
+            error_message, "Failed to fetch unread emails")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/search", response_model=EmailListResponse)
 async def search_emails_by_sender(
-    sender: str = Query(..., min_length=1, description="Search query for sender (email or name) - case-insensitive partial match"),
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of emails to return"),
-    offset: int = Query(default=0, ge=0, description="Number of emails to skip"),
-    from_date: Optional[datetime] = Query(default=None, description="Filter emails from this date (ISO format)"),
-    to_date: Optional[datetime] = Query(default=None, description="Filter emails until this date (ISO format)"),
-    folder: str = Query(default="INBOX", description="Folder to search in")
+    sender: str = Query(..., min_length=1,
+                        description="Search query for sender (email or name) - case-insensitive partial match"),
+    limit: int = Query(default=20, ge=1, le=100,
+                       description="Maximum number of emails to return"),
+    offset: int = Query(
+        default=0, ge=0, description="Number of emails to skip"),
+    from_date: Optional[datetime] = Query(
+        default=None, description="Filter emails from this date (ISO format)"),
+    to_date: Optional[datetime] = Query(
+        default=None, description="Filter emails until this date (ISO format)"),
+    folder: str = Query(default="INBOX", description="Folder to search in"),
+    token: AuthDep = ""
 ):
     """
     Search emails by sender with fuzzy matching.
@@ -150,8 +185,10 @@ async def search_emails_by_sender(
     For example, searching 'john' will match 'john@example.com' and 'John Doe <johnd@test.com>'.
     """
     try:
-        logger.info(f"Searching emails from sender '{sender}' in {folder}, limit={limit}, offset={offset}")
-        
+        logger.info(f"Searching emails from sender '{sender}' in {
+                    folder}, limit={limit}, offset={offset}")
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         emails = await email_receiver.search_emails_by_sender(
             sender_query=sender,
             folder=folder,
@@ -160,9 +197,9 @@ async def search_emails_by_sender(
             from_date=from_date,
             to_date=to_date
         )
-        
+
         logger.info(f"Found {len(emails)} emails matching sender '{sender}'")
-        
+
         return EmailListResponse(
             success=True,
             emails=emails,
@@ -172,19 +209,27 @@ async def search_emails_by_sender(
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, "Failed to search emails")
+        status_code, error_type = handle_error(
+            error_message, "Failed to search emails")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/spam", response_model=EmailListResponse)
 async def get_spam_emails(
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of emails to return"),
-    offset: int = Query(default=0, ge=0, description="Number of emails to skip"),
-    from_date: Optional[datetime] = Query(default=None, description="Filter emails from this date (ISO format)"),
-    to_date: Optional[datetime] = Query(default=None, description="Filter emails until this date (ISO format)")
+    limit: int = Query(default=20, ge=1, le=100,
+                       description="Maximum number of emails to return"),
+    offset: int = Query(
+        default=0, ge=0, description="Number of emails to skip"),
+    from_date: Optional[datetime] = Query(
+        default=None, description="Filter emails from this date (ISO format)"),
+    to_date: Optional[datetime] = Query(
+        default=None, description="Filter emails until this date (ISO format)"),
+    token: AuthDep = ""
+
 ):
     """
     Get emails from spam/junk folder with pagination.
@@ -192,16 +237,17 @@ async def get_spam_emails(
     """
     try:
         logger.info(f"Fetching spam emails, limit={limit}, offset={offset}")
-        
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         emails = await email_receiver.fetch_spam_emails(
             limit=limit,
             offset=offset,
             from_date=from_date,
             to_date=to_date
         )
-        
+
         logger.info(f"Successfully fetched {len(emails)} spam emails")
-        
+
         return EmailListResponse(
             success=True,
             emails=emails,
@@ -211,26 +257,31 @@ async def get_spam_emails(
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, "Failed to fetch spam emails")
+        status_code, error_type = handle_error(
+            error_message, "Failed to fetch spam emails")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/folders", response_model=FolderListResponse)
-async def list_email_folders():
+async def list_email_folders(
+    token: AuthDep = ""
+):
     """
     List all available email folders/mailboxes.
     Returns folder names, full paths, message counts, and unread counts.
     """
     try:
         logger.info("Fetching email folders")
-        
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         folders = await email_receiver.list_folders()
-        
+
         logger.info(f"Successfully fetched {len(folders)} folders")
-        
+
         return FolderListResponse(
             success=True,
             folders=folders,
@@ -238,28 +289,38 @@ async def list_email_folders():
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, "Failed to fetch folders")
+        status_code, error_type = handle_error(
+            error_message, "Failed to fetch folders")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/folder/{folder_path:path}", response_model=EmailListResponse)
 async def get_folder_emails(
     folder_path: str,
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of emails to return"),
-    offset: int = Query(default=0, ge=0, description="Number of emails to skip"),
-    from_date: Optional[datetime] = Query(default=None, description="Filter emails from this date (ISO format)"),
-    to_date: Optional[datetime] = Query(default=None, description="Filter emails until this date (ISO format)")
+    limit: int = Query(default=20, ge=1, le=100,
+                       description="Maximum number of emails to return"),
+    offset: int = Query(
+        default=0, ge=0, description="Number of emails to skip"),
+    from_date: Optional[datetime] = Query(
+        default=None, description="Filter emails from this date (ISO format)"),
+    to_date: Optional[datetime] = Query(
+        default=None, description="Filter emails until this date (ISO format)"),
+
+    token: AuthDep = ""
 ):
     """
     Get emails from a specific folder with pagination.
     Use the full_path from /receive/folders endpoint (e.g., '[Gmail]/Sent Mail', 'INBOX', 'Drafts').
     """
     try:
-        logger.info(f"Fetching emails from folder '{folder_path}', limit={limit}, offset={offset}")
-        
+        logger.info(f"Fetching emails from folder '{
+                    folder_path}', limit={limit}, offset={offset}")
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         emails = await email_receiver.get_folder_emails(
             folder=folder_path,
             limit=limit,
@@ -267,9 +328,10 @@ async def get_folder_emails(
             from_date=from_date,
             to_date=to_date
         )
-        
-        logger.info(f"Successfully fetched {len(emails)} emails from folder '{folder_path}'")
-        
+
+        logger.info(f"Successfully fetched {
+                    len(emails)} emails from folder '{folder_path}'")
+
         return EmailListResponse(
             success=True,
             emails=emails,
@@ -279,17 +341,22 @@ async def get_folder_emails(
         )
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, f"Failed to fetch emails from folder '{folder_path}'")
+        status_code, error_type = handle_error(
+            error_message, f"Failed to fetch emails from folder '{folder_path}'")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/email/{email_id}", response_model=EmailDetailResponse)
 async def get_email_by_id(
     email_id: str,
-    folder: str = Query(default="INBOX", description="Folder where the email is located")
+    folder: str = Query(
+        default="INBOX", description="Folder where the email is located"),
+    token: AuthDep = ""
+
 ):
     """
     Get full details of a single email by its ID.
@@ -297,12 +364,13 @@ async def get_email_by_id(
     """
     try:
         logger.info(f"Fetching email {email_id} from folder '{folder}'")
-        
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         email_detail = await email_receiver.get_email_by_id(
             email_id=email_id,
             folder=folder
         )
-        
+
         if not email_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -312,9 +380,9 @@ async def get_email_by_id(
                     "detail": f"Email with ID '{email_id}' not found in folder '{folder}'"
                 }
             )
-        
+
         logger.info(f"Successfully fetched email {email_id}")
-        
+
         return EmailDetailResponse(
             success=True,
             email=email_detail
@@ -323,29 +391,35 @@ async def get_email_by_id(
         raise
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, f"Failed to fetch email {email_id}")
+        status_code, error_type = handle_error(
+            error_message, f"Failed to fetch email {email_id}")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.post("/email/{email_id}/mark-read")
 async def mark_email_as_read(
     email_id: str,
-    folder: str = Query(default="INBOX", description="Folder where the email is located")
+    folder: str = Query(
+        default="INBOX", description="Folder where the email is located"),
+
+    token: AuthDep = ""
 ):
     """
     Mark an email as read by setting the SEEN flag.
     """
     try:
         logger.info(f"Marking email {email_id} as read in folder '{folder}'")
-        
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         success = await email_receiver.mark_as_read(
             email_id=email_id,
             folder=folder
         )
-        
+
         if success:
             logger.info(f"Successfully marked email {email_id} as read")
             return {
@@ -365,29 +439,35 @@ async def mark_email_as_read(
         raise
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, f"Failed to mark email {email_id} as read")
+        status_code, error_type = handle_error(
+            error_message, f"Failed to mark email {email_id} as read")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.post("/email/{email_id}/mark-unread")
 async def mark_email_as_unread(
     email_id: str,
-    folder: str = Query(default="INBOX", description="Folder where the email is located")
+    folder: str = Query(
+        default="INBOX", description="Folder where the email is located"),
+
+    token: AuthDep = ""
 ):
     """
     Mark an email as unread by removing the SEEN flag.
     """
     try:
         logger.info(f"Marking email {email_id} as unread in folder '{folder}'")
-        
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         success = await email_receiver.mark_as_unread(
             email_id=email_id,
             folder=folder
         )
-        
+
         if success:
             logger.info(f"Successfully marked email {email_id} as unread")
             return {
@@ -407,19 +487,25 @@ async def mark_email_as_unread(
         raise
     except Exception as e:
         error_message = str(e)
-        status_code, error_type = handle_error(error_message, f"Failed to mark email {email_id} as unread")
+        status_code, error_type = handle_error(
+            error_message, f"Failed to mark email {email_id} as unread")
         raise HTTPException(
             status_code=status_code,
-            detail={"success": False, "error": error_type, "detail": error_message}
+            detail={"success": False, "error": error_type,
+                    "detail": error_message}
         )
 
 
 @router.get("/status")
-async def get_receive_status():
+async def get_receive_status(
+    token: AuthDep = ""
+):
     """
     Get the current status of the email receiver (IMAP) configuration.
     """
     try:
+        email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
+            token, email_user)
         config_status = email_receiver.get_configuration_status()
         return {
             "success": True,

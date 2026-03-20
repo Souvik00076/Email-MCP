@@ -49,7 +49,7 @@ class EmailReceiverStrategy(ABC):
     Implement this class to create different email receiving providers
     (e.g., IMAP, Gmail API, Microsoft Graph, etc.)
     """
-    
+
     @abstractmethod
     async def fetch_recent_emails(
         self,
@@ -61,19 +61,19 @@ class EmailReceiverStrategy(ABC):
     ) -> List[EmailSummary]:
         """
         Fetch recent emails from a folder with pagination.
-        
+
         Args:
             folder: Folder name to fetch from (default: INBOX)
             limit: Maximum number of emails to return
             offset: Number of emails to skip
             from_date: Optional start date filter
             to_date: Optional end date filter
-            
+
         Returns:
             List[EmailSummary]: List of email summaries
         """
         pass
-    
+
     @abstractmethod
     async def fetch_unread_emails(
         self,
@@ -85,19 +85,19 @@ class EmailReceiverStrategy(ABC):
     ) -> List[EmailSummary]:
         """
         Fetch unread emails from a folder with pagination.
-        
+
         Args:
             folder: Folder name to fetch from (default: INBOX)
             limit: Maximum number of emails to return
             offset: Number of emails to skip
             from_date: Optional start date filter
             to_date: Optional end date filter
-            
+
         Returns:
             List[EmailSummary]: List of unread email summaries
         """
         pass
-    
+
     @abstractmethod
     async def search_emails_by_sender(
         self,
@@ -110,7 +110,7 @@ class EmailReceiverStrategy(ABC):
     ) -> List[EmailSummary]:
         """
         Search emails by sender with fuzzy matching.
-        
+
         Args:
             sender_query: Search query for sender (email or name)
             folder: Folder name to search in (default: INBOX)
@@ -118,12 +118,12 @@ class EmailReceiverStrategy(ABC):
             offset: Number of emails to skip
             from_date: Optional start date filter
             to_date: Optional end date filter
-            
+
         Returns:
             List[EmailSummary]: List of matching email summaries
         """
         pass
-    
+
     @abstractmethod
     async def fetch_spam_emails(
         self,
@@ -134,18 +134,18 @@ class EmailReceiverStrategy(ABC):
     ) -> List[EmailSummary]:
         """
         Fetch emails from spam/junk folder with pagination.
-        
+
         Args:
             limit: Maximum number of emails to return
             offset: Number of emails to skip
             from_date: Optional start date filter
             to_date: Optional end date filter
-            
+
         Returns:
             List[EmailSummary]: List of spam email summaries
         """
         pass
-    
+
     @abstractmethod
     async def get_email_by_id(
         self,
@@ -154,16 +154,16 @@ class EmailReceiverStrategy(ABC):
     ) -> Optional[EmailDetail]:
         """
         Get full email details by ID.
-        
+
         Args:
             email_id: Unique email identifier
             folder: Folder where the email is located
-            
+
         Returns:
             EmailDetail: Full email details or None if not found
         """
         pass
-    
+
     @abstractmethod
     async def mark_as_read(
         self,
@@ -172,16 +172,16 @@ class EmailReceiverStrategy(ABC):
     ) -> bool:
         """
         Mark an email as read.
-        
+
         Args:
             email_id: Unique email identifier
             folder: Folder where the email is located
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
         pass
-    
+
     @abstractmethod
     async def mark_as_unread(
         self,
@@ -190,26 +190,26 @@ class EmailReceiverStrategy(ABC):
     ) -> bool:
         """
         Mark an email as unread.
-        
+
         Args:
             email_id: Unique email identifier
             folder: Folder where the email is located
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
         pass
-    
+
     @abstractmethod
     async def list_folders(self) -> List[FolderInfo]:
         """
         List all available folders/mailboxes.
-        
+
         Returns:
             List[FolderInfo]: List of folder information
         """
         pass
-    
+
     @abstractmethod
     async def get_folder_emails(
         self,
@@ -221,34 +221,34 @@ class EmailReceiverStrategy(ABC):
     ) -> List[EmailSummary]:
         """
         Get emails from a specific folder with pagination.
-        
+
         Args:
             folder: Folder name/path
             limit: Maximum number of emails to return
             offset: Number of emails to skip
             from_date: Optional start date filter
             to_date: Optional end date filter
-            
+
         Returns:
             List[EmailSummary]: List of email summaries
         """
         pass
-    
+
     @abstractmethod
     def validate_configuration(self) -> bool:
         """
         Validate that the email receiver is properly configured.
-        
+
         Returns:
             bool: True if configuration is valid, False otherwise
         """
         pass
-    
+
     @abstractmethod
     def get_provider_name(self) -> str:
         """
         Get the name of the email provider.
-        
+
         Returns:
             str: Provider name (e.g., "IMAP", "Gmail API", "Microsoft Graph")
         """

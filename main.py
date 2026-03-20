@@ -7,9 +7,13 @@ import logging
 import os
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # Import routers
+from middlewares.require_auth import require_auth
 from routes import send_router, receive_router, auth_router
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -88,19 +92,6 @@ async def oauth_protected_resource_mcp():
         "scopes_supported": ["email.read", "email.send"]
     })
 
-security = HTTPBearer(auto_error=False)
-
-
-async def require_auth(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security)
-):
-    if not credentials:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    return credentials.credentials
 
 # Include routers
 app.include_router(send_router, dependencies=[Depends(require_auth)])
@@ -116,6 +107,7 @@ mcp = FastApiMCP(
         dependencies=[Depends(require_auth)]
     )
 )
+
 mcp.mount_http()
 
 if __name__ == "__main__":
