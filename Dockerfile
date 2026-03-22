@@ -42,7 +42,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONHASHSEED=random
 
 # Copy application code
-COPY --chown=appuser:appgroup app/ ./app/
+COPY --chown=appuser:appgroup . ./app/
 
 # Switch to non-root user
 USER appuser

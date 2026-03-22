@@ -1,0 +1,33 @@
+# Documentation
+README.md
+
+# Environment files
+.env
+.env.example
+
+# Caches
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache
+.cache
+*.cache
+
+# Node modules (if any)
+node_modules
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
