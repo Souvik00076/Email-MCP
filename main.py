@@ -1,3 +1,6 @@
+from lifespan import lifespan
+from routes import send_router, receive_router, auth_router
+from middlewares.require_auth import require_auth
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_mcp import AuthConfig, FastApiMCP
@@ -13,9 +16,6 @@ load_dotenv()
 
 
 # Import routers
-from middlewares.require_auth import require_auth
-from routes import send_router, receive_router, auth_router
-from lifespan import lifespan
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -58,7 +58,7 @@ async def health_check():
     return HealthResponse(status="healthy", service="Email MCP Server")
 
 
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8002")
+BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8002")
 
 
 @app.get("/.well-known/oauth-authorization-server")
