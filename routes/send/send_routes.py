@@ -28,13 +28,9 @@ class EmailResponse(BaseModel):
     email_id: Optional[str] = None
 
 
-email_user = "souvikfs06@gmail.com"
-
 # Routes
-
-
 @router.post("/email", response_model=EmailResponse)
-async def send_email(email: EmailRequest, token=AuthDep):
+async def send_email(email: EmailRequest, user_info: AuthDep):
     """
     Send an email via MCP server using SMTP.
     Supports CC and BCC recipients.
@@ -49,7 +45,8 @@ async def send_email(email: EmailRequest, token=AuthDep):
             cc=email.cc,
             bcc=email.bcc
         )
-        email_sender: EmailSenderStrategy = SMTPEmailSender(token, email_user)
+        email_sender: EmailSenderStrategy = SMTPEmailSender(
+            user_info.token, user_info.email)
         # Send email using singleton SMTP sender
         result = await email_sender.send_email(email_message)
         logger.info(f"Email sent successfully to: {email.to}")
@@ -87,10 +84,11 @@ async def send_email(email: EmailRequest, token=AuthDep):
 
 
 @router.get("/status")
-async def get_send_status(token: AuthDep):
+async def get_send_status(user_info: AuthDep):
 
     try:
-        email_sender: EmailSenderStrategy = SMTPEmailSender(token, email_user)
+        email_sender: EmailSenderStrategy = SMTPEmailSender(
+            user_info.token, user_info.email)
         config_status = email_sender.get_configuration_status()
         return {
             "success": True,

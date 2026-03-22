@@ -15,15 +15,18 @@ load_dotenv()
 # Import routers
 from middlewares.require_auth import require_auth
 from routes import send_router, receive_router, auth_router
+from lifespan import lifespan
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="Email MCP Server",
     description="MCP Server for Email operations - Send via SMTP, Receive via IMAP",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware

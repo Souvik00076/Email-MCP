@@ -4,5 +4,13 @@
   "pythonVersion": "3.10",
   "typeCheckingMode": "basic",
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": true,
+  "pythonPlatform": "Linux",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.10",
+      "extraPaths": []
+    }
+  ]
 }

@@ -35,8 +35,6 @@ class EmailDetailResponse(BaseModel):
     email: EmailDetail
 
 
-email_user = "souvikfs06@gmail.com"
-
 # Helper function for error handling
 
 
@@ -60,6 +58,7 @@ def handle_error(error_message: str, context: str):
 # Routes
 @router.get("/recent", response_model=EmailListResponse)
 async def get_recent_emails(
+    user_info: AuthDep,
     limit: int = Query(default=20, ge=1, le=100,
                        description="Maximum number of emails to return"),
     offset: int = Query(
@@ -69,8 +68,7 @@ async def get_recent_emails(
     to_date: Optional[datetime] = Query(
         default=None, description="Filter emails until this date (ISO format)"),
     folder: str = Query(
-        default="INBOX", description="Folder to fetch emails from"),
-    token: AuthDep = ""
+        default="INBOX", description="Folder to fetch emails from")
 ):
     """
     Get recent emails with pagination and optional date filtering.
@@ -79,10 +77,11 @@ async def get_recent_emails(
     try:
         logger.info(f"Fetching recent emails from {
                     folder}, limit={limit}, offset={offset}")
-        logger.info(f"[DEBUG] token (first 20 chars): {str(token)[:20]}...")
+        logger.info(f"[DEBUG] token (first 20 chars): {
+                    str(user_info.token)[:20]}...")
 
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            str(token), email_user)
+            str(user_info.token), user_info.email)
         emails = await email_receiver.fetch_recent_emails(
             folder=folder,
             limit=limit,
@@ -113,6 +112,7 @@ async def get_recent_emails(
 
 @router.get("/unread", response_model=EmailListResponse)
 async def get_unread_emails(
+    user_info: AuthDep,
     limit: int = Query(default=20, ge=1, le=100,
                        description="Maximum number of emails to return"),
     offset: int = Query(
@@ -122,10 +122,7 @@ async def get_unread_emails(
     to_date: Optional[datetime] = Query(
         default=None, description="Filter emails until this date (ISO format)"),
     folder: str = Query(
-        default="INBOX", description="Folder to fetch emails from"),
-
-    token: AuthDep = ""
-
+        default="INBOX", description="Folder to fetch emails from")
 ):
     """
     Get unread emails with pagination and optional date filtering.
@@ -135,7 +132,7 @@ async def get_unread_emails(
         logger.info(f"Fetching unread emails from {
                     folder}, limit={limit}, offset={offset}")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         emails = await email_receiver.fetch_unread_emails(
             folder=folder,
             limit=limit,
@@ -166,6 +163,7 @@ async def get_unread_emails(
 
 @router.get("/search", response_model=EmailListResponse)
 async def search_emails_by_sender(
+    user_info: AuthDep,
     sender: str = Query(..., min_length=1,
                         description="Search query for sender (email or name) - case-insensitive partial match"),
     limit: int = Query(default=20, ge=1, le=100,
@@ -176,8 +174,7 @@ async def search_emails_by_sender(
         default=None, description="Filter emails from this date (ISO format)"),
     to_date: Optional[datetime] = Query(
         default=None, description="Filter emails until this date (ISO format)"),
-    folder: str = Query(default="INBOX", description="Folder to search in"),
-    token: AuthDep = ""
+    folder: str = Query(default="INBOX", description="Folder to search in")
 ):
     """
     Search emails by sender with fuzzy matching.
@@ -188,7 +185,7 @@ async def search_emails_by_sender(
         logger.info(f"Searching emails from sender '{sender}' in {
                     folder}, limit={limit}, offset={offset}")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         emails = await email_receiver.search_emails_by_sender(
             sender_query=sender,
             folder=folder,
@@ -220,6 +217,7 @@ async def search_emails_by_sender(
 
 @router.get("/spam", response_model=EmailListResponse)
 async def get_spam_emails(
+    user_info: AuthDep,
     limit: int = Query(default=20, ge=1, le=100,
                        description="Maximum number of emails to return"),
     offset: int = Query(
@@ -227,9 +225,7 @@ async def get_spam_emails(
     from_date: Optional[datetime] = Query(
         default=None, description="Filter emails from this date (ISO format)"),
     to_date: Optional[datetime] = Query(
-        default=None, description="Filter emails until this date (ISO format)"),
-    token: AuthDep = ""
-
+        default=None, description="Filter emails until this date (ISO format)")
 ):
     """
     Get emails from spam/junk folder with pagination.
@@ -238,7 +234,7 @@ async def get_spam_emails(
     try:
         logger.info(f"Fetching spam emails, limit={limit}, offset={offset}")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         emails = await email_receiver.fetch_spam_emails(
             limit=limit,
             offset=offset,
@@ -268,7 +264,7 @@ async def get_spam_emails(
 
 @router.get("/folders", response_model=FolderListResponse)
 async def list_email_folders(
-    token: AuthDep = ""
+    user_info: AuthDep
 ):
     """
     List all available email folders/mailboxes.
@@ -277,7 +273,7 @@ async def list_email_folders(
     try:
         logger.info("Fetching email folders")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         folders = await email_receiver.list_folders()
 
         logger.info(f"Successfully fetched {len(folders)} folders")
@@ -300,6 +296,7 @@ async def list_email_folders(
 
 @router.get("/folder/{folder_path:path}", response_model=EmailListResponse)
 async def get_folder_emails(
+    user_info: AuthDep,
     folder_path: str,
     limit: int = Query(default=20, ge=1, le=100,
                        description="Maximum number of emails to return"),
@@ -308,9 +305,7 @@ async def get_folder_emails(
     from_date: Optional[datetime] = Query(
         default=None, description="Filter emails from this date (ISO format)"),
     to_date: Optional[datetime] = Query(
-        default=None, description="Filter emails until this date (ISO format)"),
-
-    token: AuthDep = ""
+        default=None, description="Filter emails until this date (ISO format)")
 ):
     """
     Get emails from a specific folder with pagination.
@@ -320,7 +315,7 @@ async def get_folder_emails(
         logger.info(f"Fetching emails from folder '{
                     folder_path}', limit={limit}, offset={offset}")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         emails = await email_receiver.get_folder_emails(
             folder=folder_path,
             limit=limit,
@@ -352,11 +347,10 @@ async def get_folder_emails(
 
 @router.get("/email/{email_id}", response_model=EmailDetailResponse)
 async def get_email_by_id(
+    user_info: AuthDep,
     email_id: str,
     folder: str = Query(
-        default="INBOX", description="Folder where the email is located"),
-    token: AuthDep = ""
-
+        default="INBOX", description="Folder where the email is located")
 ):
     """
     Get full details of a single email by its ID.
@@ -365,7 +359,7 @@ async def get_email_by_id(
     try:
         logger.info(f"Fetching email {email_id} from folder '{folder}'")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         email_detail = await email_receiver.get_email_by_id(
             email_id=email_id,
             folder=folder
@@ -402,11 +396,10 @@ async def get_email_by_id(
 
 @router.post("/email/{email_id}/mark-read")
 async def mark_email_as_read(
+    user_info: AuthDep,
     email_id: str,
     folder: str = Query(
-        default="INBOX", description="Folder where the email is located"),
-
-    token: AuthDep = ""
+        default="INBOX", description="Folder where the email is located")
 ):
     """
     Mark an email as read by setting the SEEN flag.
@@ -414,7 +407,7 @@ async def mark_email_as_read(
     try:
         logger.info(f"Marking email {email_id} as read in folder '{folder}'")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         success = await email_receiver.mark_as_read(
             email_id=email_id,
             folder=folder
@@ -450,11 +443,10 @@ async def mark_email_as_read(
 
 @router.post("/email/{email_id}/mark-unread")
 async def mark_email_as_unread(
+    user_info: AuthDep,
     email_id: str,
     folder: str = Query(
-        default="INBOX", description="Folder where the email is located"),
-
-    token: AuthDep = ""
+        default="INBOX", description="Folder where the email is located")
 ):
     """
     Mark an email as unread by removing the SEEN flag.
@@ -462,7 +454,7 @@ async def mark_email_as_unread(
     try:
         logger.info(f"Marking email {email_id} as unread in folder '{folder}'")
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         success = await email_receiver.mark_as_unread(
             email_id=email_id,
             folder=folder
@@ -498,14 +490,14 @@ async def mark_email_as_unread(
 
 @router.get("/status")
 async def get_receive_status(
-    token: AuthDep = ""
+    user_info: AuthDep
 ):
     """
     Get the current status of the email receiver (IMAP) configuration.
     """
     try:
         email_receiver: EmailReceiverStrategy = IMAPEmailReceiver(
-            token, email_user)
+            user_info.token, user_info.email)
         config_status = email_receiver.get_configuration_status()
         return {
             "success": True,
