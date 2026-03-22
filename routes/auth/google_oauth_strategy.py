@@ -68,5 +68,30 @@ class GoogleOAuthStrategy(OAuthStrategy):
             email_verified=data.get("verified_email", False),
         )
 
+    async def refresh_token(self, refresh_token: str) -> str:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "refresh_token": refresh_token,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "grant_type": "refresh_token",
+                },
+            )
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token"
+            )
+        data = response.json()
+        return json.dumps({
+            "access_token": data["access_token"],
+            "token_type": data.get("token_type", "Bearer"),
+            "expires_in": data.get("expires_in", 3600),
+            "refresh_token": data.get("refresh_token")
+        })
+
     def get_provider_name(self) -> str:
         return "google"

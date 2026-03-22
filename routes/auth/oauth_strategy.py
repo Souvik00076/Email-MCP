@@ -27,5 +27,10 @@ class OAuthStrategy(ABC):
         pass
 
     @abstractmethod
+    async def refresh_token(self, refresh_token: str) -> str:
+        """Refresh access token using refresh token. Returns new access_token."""
+        pass
+
+    @abstractmethod
     def get_provider_name(self) -> str:
         pass
