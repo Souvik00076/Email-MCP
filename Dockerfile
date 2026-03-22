@@ -42,7 +42,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONHASHSEED=random
 
 # Copy application code
-COPY --chown=appuser:appgroup . ./app/
+COPY --chown=appuser:appgroup . .
 
 # Switch to non-root user
 USER appuser
@@ -56,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application
 # Using uvicorn with optimized settings for production
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1", "--loop", "uvloop", "--http", "httptools"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1", "--loop", "uvloop", "--http", "httptools"]
