@@ -2,6 +2,56 @@
 
 A FastAPI-based MCP (Model Context Protocol) server for email operations. Supports both sending emails via SMTP and reading emails via IMAP.
 
+## Integration with AI Tools
+
+### Claude Code Integration
+
+To use this MCP server with Claude Code, add it as a remote HTTP server with OAuth:
+
+**Using the hosted server:**
+```bash
+claude mcp add --transport http email-server https://mcp-email.souvikb.in/mcp
+```
+
+**Using a local server:**
+```bash
+claude mcp add --transport http email-server http://localhost:8000/mcp
+```
+
+### OpenCode Integration
+
+To use this MCP server with OpenCode, you need to add it to your `opencode.json` configuration file.
+
+**Configuration file locations:**
+
+- **Linux:** `~/.config/opencode/opencode.json`
+- **macOS:** `~/.config/opencode/opencode.json`
+- **Windows:** `%USERPROFILE%\.config\opencode\opencode.json`
+
+**1. Add the MCP server to `opencode.json`:**
+
+```json
+{
+  "mcp": {
+    "email-server": {
+      "type": "remote",
+      "url": "https://mcp-email.souvikb.in/mcp",
+      "oauth": {}
+    }
+  }
+}
+```
+
+**2. Restart OpenCode**
+
+**3. Authenticate with the MCP server:**
+
+```bash
+opencode mcp auth email-server
+```
+
+**WSL Users:** If you're using WSL and encounter callback issues, convert `127.0.0.1` in the callback URL to `localhost`.
+
 ## Features
 
 - **Send Emails** - Send emails with CC/BCC support via SMTP
