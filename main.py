@@ -1,9 +1,10 @@
 from lifespan import lifespan
 from routes import send_router, receive_router, auth_router
-from middlewares.require_auth import require_auth
+from middlewares import require_auth,CatchAllErrorsMiddleware
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_mcp import AuthConfig, FastApiMCP
+
 from pydantic import BaseModel
 import uvicorn
 import logging
@@ -20,6 +21,8 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8002")
+
 
 # Create FastAPI app with lifespan
 app = FastAPI(
@@ -58,7 +61,6 @@ async def health_check():
     return HealthResponse(status="healthy", service="Email MCP Server")
 
 
-BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8002")
 
 
 @app.get("/.well-known/oauth-authorization-server")
@@ -100,6 +102,7 @@ async def oauth_protected_resource_mcp():
 app.include_router(send_router, dependencies=[Depends(require_auth)])
 app.include_router(receive_router, dependencies=[Depends(require_auth)])
 app.include_router(auth_router)
+app.add_middleware(CatchAllErrorsMiddleware)
 
 # MCP Integration
 mcp = FastApiMCP(
