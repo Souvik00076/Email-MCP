@@ -65,18 +65,34 @@ opencode mcp auth email-server
 
 ## Setup
 
-### 1. Create virtual environment
+### Option A — Docker (recommended)
+
+Requires Docker and Docker Compose.
+
+```bash
+cp .env.example .env
+# fill in your credentials, then:
+docker compose up --build
+```
+
+The app will be available at `http://localhost:8002` and hot-reloads on file changes. Redis is started automatically and wired up internally — no extra config needed.
+
+> **Note:** Make sure `REDIS_PASSWORD` is set in your `.env` file.
+
+### Option B — Local (manual)
+
+#### 1. Create virtual environment
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-### 2. Install dependencies
+#### 2. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment
+#### 3. Configure environment
 ```bash
 cp .env.example .env
 ```
@@ -100,7 +116,7 @@ IMAP_USE_SSL=True
 
 > **Note for Gmail users:** You need to use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password. Enable 2FA first, then generate an app password.
 
-### 4. Run the server
+#### 4. Run the server
 ```bash
 python main.py
 ```
@@ -250,6 +266,8 @@ curl -X POST "http://localhost:8000/emails/12345/mark-unread?folder=INBOX"
 ```
 email-mcp/
 ├── main.py                    # FastAPI app with all endpoints
+├── Dockerfile.dev             # Dev image (Python 3.12-slim + uvicorn --reload)
+├── docker-compose.yml         # App + Redis stack for local development
 ├── sender/
 │   ├── __init__.py
 │   ├── EmailSenderStrategy.py # Abstract base for sending
