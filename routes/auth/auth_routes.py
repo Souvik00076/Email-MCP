@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends, Form, HTTPException, status, Query
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from typing import DefaultDict, Optional, List
-from datetime import datetime
+from typing import DefaultDict
 import logging
 import uuid
 import hashlib
@@ -20,6 +18,8 @@ from routes.auth.schema import AuthAuthorizeRequest, AuthCallbackRequest, AuthRe
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication and Authorization"])
+
+STATE_COOKIE = 'oauth_state'
 
 
 @router.post('/register', response_model=AuthRegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -42,11 +42,26 @@ async def authorize_client(request: AuthAuthorizeRequest = Depends()):
     client_state['code_challenge_method'] = request.code_challenge_method
     state = encryption_strategy.encrypt(client_state)
     url = auth_strategy.get_auth_url(state)
-    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+    response = RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        key=STATE_COOKIE,
+        value=request.state,
+        httponly=True,
+        secure=True,
+        samesite='lax',
+        max_age=300,
+        path='/auth'
+    )
+    return response
 
 
 @router.get('/callback', status_code=status.HTTP_302_FOUND)
-async def oauth_provider_callback(request: AuthCallbackRequest = Depends()):
+async def oauth_provider_callback(request: AuthCallbackRequest = Depends(), oauth_state: str | None = Cookie(default=None, alias=STATE_COOKIE)):
+    if not oauth_state:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing state cookie"
+        )
     auth_strategy: OAuthStrategy = GoogleOAuthStrategy()
     encryption_strategy: EncryptionStrategy = FernetEncryption()
     client_state = DefaultDict(str)
@@ -55,8 +70,7 @@ async def oauth_provider_callback(request: AuthCallbackRequest = Depends()):
     redirect_uri = decrypted_state['uri']
     code_challenge = decrypted_state['code_challenge']
     code_challenge_method = decrypted_state['code_challenge_method']
-    state = decrypted_state['state']
-    if redirect_uri is None or code_challenge is None or state is None or code_challenge_method is None:
+    if redirect_uri is None or code_challenge is None or code_challenge_method is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Code")
 
@@ -65,7 +79,7 @@ async def oauth_provider_callback(request: AuthCallbackRequest = Depends()):
     client_state['token'] = token
     client_state['redirect_uri'] = redirect_uri
     code = encryption_strategy.encrypt(client_state)
-    params = urlencode({"code": code, "state": state})
+    params = urlencode({"code": code, "state": oauth_state})
     return RedirectResponse(
         f"{redirect_uri}?{params}",
         status_code=status.HTTP_302_FOUND
