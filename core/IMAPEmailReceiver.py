@@ -83,8 +83,17 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
             self._connect()
             if not self._imap_connection:
                 raise Exception("IMAP connection not established")
+            # imaplib does not auto-quote mailbox names; folders containing
+            # spaces or special chars (e.g. "[Gmail]/Sent Mail") must be
+            # wrapped in a quoted IMAP string or the server rejects the
+            # SELECT/EXAMINE command with "Could not parse command".
+            mailbox = folder
+            if any(c in folder for c in (' ', '"', '\\')) and not (
+                    folder.startswith('"') and folder.endswith('"')):
+                escaped = folder.replace('\\', '\\\\').replace('"', '\\"')
+                mailbox = f'"{escaped}"'
             status, data = self._imap_connection.select(
-                folder, readonly=readonly)
+                mailbox, readonly=readonly)
             if status != "OK":
                 raise Exception(f"Failed to select folder '{folder}': {data}")
             self._current_folder = folder
