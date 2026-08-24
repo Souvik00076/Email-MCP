@@ -7,12 +7,16 @@ from .EmailSenderStrategy import EmailSenderStrategy, EmailMessage
 
 class SMTPEmailSender(EmailSenderStrategy):
 
+    # Defaults kept for backward compatibility; pass smtp_host/smtp_port to
+    # __init__ to target a different SMTP server (e.g. non-Gmail providers).
     SMTP_HOST = "smtp.gmail.com"
     SMTP_PORT = 587
 
-    def __init__(self, access_token: str, email_user: str):
+    def __init__(self, access_token: str, email_user: str, smtp_host: str = SMTP_HOST, smtp_port: int = SMTP_PORT):
         self.access_token = access_token
         self.email_user = email_user
+        self.SMTP_HOST = smtp_host
+        self.SMTP_PORT = smtp_port
 
     def _build_xoauth2_string(self) -> str:
         raw = f"user={self.email_user}\x01auth=Bearer {

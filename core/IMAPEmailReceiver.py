@@ -17,6 +17,8 @@ from .EmailReceiverStrategy import (
 
 class IMAPEmailReceiver(EmailReceiverStrategy):
 
+    # Defaults kept for backward compatibility; pass imap_host/imap_port to
+    # __init__ to target a different IMAP server (e.g. non-Gmail providers).
     IMAP_HOST = "imap.gmail.com"
     IMAP_PORT = 993
 
@@ -30,9 +32,11 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
         "[Gmail]/Junk"
     ]
 
-    def __init__(self, access_token: str, email_user: str):
+    def __init__(self, access_token: str, email_user: str, imap_host: str = IMAP_HOST, imap_port: int = IMAP_PORT):
         self.access_token = access_token
         self.email_user = email_user
+        self.IMAP_HOST = imap_host
+        self.IMAP_PORT = imap_port
         self._imap_connection: Optional[imaplib.IMAP4_SSL] = None
         self._is_connected: bool = False
         self._current_folder: Optional[str] = None
@@ -62,6 +66,7 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
                 "XOAUTH2", lambda x: self._build_xoauth2_string()
             )
             self._is_connected = True
+
         except imaplib.IMAP4.error as e:
             import logging
             logging.getLogger(__name__).error(f"IMAP XOAUTH2 auth failed: {repr(e)}")
@@ -192,6 +197,39 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
         except:
             return datetime.now()
 
+    def _parse_fetch_response(self, msg_data: list) -> List[Tuple[bytes, bool, bytes]]:
+        """Parse a `FETCH ... (FLAGS RFC822)` response — single or batched —
+        into a list of (email_id, is_read, raw_email) tuples.
+
+        A batched response repeats the (header, raw) tuple pattern once per
+        message, with plain b')' entries interleaved as separators; those
+        aren't tuples, so the isinstance check below skips them. A
+        single-message response is just the degenerate case of one tuple.
+        """
+        parsed = []
+        for part in msg_data:
+            if not isinstance(part, tuple) or len(part) < 2:
+                continue
+            header, raw_email = part[0], part[1]
+            if not isinstance(header, bytes) or not isinstance(raw_email, bytes):
+                continue
+            id_match = re.match(rb"(\d+)", header)
+            if not id_match:
+                continue
+            parsed.append((id_match.group(1), b"\\Seen" in header, raw_email))
+        return parsed
+
+    def _extract_common_fields(self, msg: Message) -> Tuple[str, str, str, str, datetime]:
+        """Extract the header fields shared by summary and detail views:
+        (subject, from_name, from_address, to_address, date)."""
+        subject = self._decode_header_value(
+            msg.get("Subject", "(No Subject)"))
+        from_name, from_address = self._parse_email_address(
+            msg.get("From", ""))
+        to_address = msg.get("To", "")
+        date = self._parse_date(msg.get("Date", ""))
+        return subject, from_name, from_address, to_address, date
+
     def _build_search_criteria(
         self,
         unread_only: bool = False,
@@ -239,33 +277,29 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
 
         summaries = []
 
-        for email_id in fetch_slice:
+        if not fetch_slice:
+            return summaries
+
+        # (FLAGS RFC822) asks the server for two things together in one
+        # round-trip: the message's flags (to know if it's read/unread) and
+        # its full raw content.
+        # Batch fetch: one FETCH call for all IDs (comma-separated message set)
+        # instead of one round-trip per email. fetch_slice items are bytes
+        # (e.g. b"20"), so decode each before joining — imaplib's fetch()
+        # is typed to take a str message_set.
+        message_set = ",".join(i.decode() for i in fetch_slice)
+        status, msg_data = self._imap_connection.fetch(
+            message_set, "(FLAGS RFC822)")
+        if status != "OK" or not msg_data:
+            return summaries
+
+        parsed_messages = self._parse_fetch_response(msg_data)
+
+        for email_id, is_read, raw_email in parsed_messages:
             try:
-                status, msg_data = self._imap_connection.fetch(
-                    email_id, "(FLAGS RFC822)")
-                if status != "OK" or not msg_data or not msg_data[0]:
-                    continue
-
-                is_read = False
-                raw_email = None
-                for part in msg_data:
-                    if isinstance(part, tuple):
-                        if isinstance(part[0], bytes):
-                            is_read = b"\\Seen" in part[0]
-                        if len(part) > 1 and isinstance(part[1], bytes):
-                            raw_email = part[1]
-                            break
-
-                if not raw_email:
-                    continue
-
                 msg = email.message_from_bytes(raw_email)
-                subject = self._decode_header_value(
-                    msg.get("Subject", "(No Subject)"))
-                from_name, from_address = self._parse_email_address(
-                    msg.get("From", ""))
-                to_address = msg.get("To", "")
-                date = self._parse_date(msg.get("Date", ""))
+                subject, from_name, from_address, to_address, date = self._extract_common_fields(
+                    msg)
 
                 if from_date and date < from_date:
                     continue
@@ -344,26 +378,20 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
             raise Exception("IMAP connection not established")
         try:
             status, msg_data = self._imap_connection.fetch(
-                email_id if isinstance(email_id, str) else email_id,
-                "(FLAGS RFC822)"
+                email_id, "(FLAGS RFC822)"
             )
             if status != "OK" or not msg_data or not msg_data[0]:
                 return None
 
-            flags_data = msg_data[0][0] if isinstance(
-                msg_data[0], tuple) else b""
-            is_read = b"\\Seen" in flags_data
-            raw_email = msg_data[0][1] if isinstance(
-                msg_data[0], tuple) else msg_data[0]
+            parsed = self._parse_fetch_response(msg_data)
+            if not parsed:
+                return None
+            _, is_read, raw_email = parsed[0]
             msg = email.message_from_bytes(raw_email)
 
-            subject = self._decode_header_value(
-                msg.get("Subject", "(No Subject)"))
-            from_name, from_address = self._parse_email_address(
-                msg.get("From", ""))
-            to_address = msg.get("To", "")
+            subject, from_name, from_address, to_address, date = self._extract_common_fields(
+                msg)
             cc = msg.get("Cc", "")
-            date = self._parse_date(msg.get("Date", ""))
 
             return EmailDetail(
                 email_id=email_id,
@@ -389,8 +417,7 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
             raise Exception("IMAP connection not established")
         try:
             status, _ = self._imap_connection.store(
-                email_id if isinstance(email_id, str) else email_id,
-                "+FLAGS", "\\Seen"
+                email_id, "+FLAGS", "\\Seen"
             )
             return status == "OK"
         except Exception as e:
@@ -402,8 +429,7 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
             raise Exception("IMAP connection not established")
         try:
             status, _ = self._imap_connection.store(
-                email_id if isinstance(email_id, str) else email_id,
-                "-FLAGS", "\\Seen"
+                email_id, "-FLAGS", "\\Seen"
             )
             return status == "OK"
         except Exception as e:
@@ -441,15 +467,21 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
                 msg_count: Optional[int] = None
                 unread_count: Optional[int] = None
                 try:
-                    sel_status, sel_data = self._imap_connection.select(
-                        folder_path, readonly=True)
-                    if sel_status == "OK" and sel_data and sel_data[0] is not None:
-                        msg_count = int(sel_data[0].decode() if isinstance(
-                            sel_data[0], bytes) else sel_data[0])
-                        srch_status, srch_data = self._imap_connection.search(
-                            None, "UNSEEN")
-                    if srch_status == "OK" and srch_data and srch_data[0]:
-                        unread_count = len(srch_data[0].split())
+                    # STATUS gets both counts in a single round-trip per
+                    # folder (vs. SELECT + SEARCH = two), and — unlike
+                    # SELECT — never changes the connection's currently
+                    # selected mailbox, so no _current_folder reset needed.
+                    st_status, st_data = self._imap_connection.status(
+                        folder_path, "(MESSAGES UNSEEN)")
+                    if st_status == "OK" and st_data and st_data[0]:
+                        st_str = st_data[0].decode(
+                            "utf-8", errors="replace") if isinstance(st_data[0], bytes) else str(st_data[0])
+                        msg_match = re.search(r"MESSAGES\s+(\d+)", st_str)
+                        unseen_match = re.search(r"UNSEEN\s+(\d+)", st_str)
+                        if msg_match:
+                            msg_count = int(msg_match.group(1))
+                        if unseen_match:
+                            unread_count = int(unseen_match.group(1))
                 except Exception:
                     pass
 
@@ -462,7 +494,6 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
             except Exception:
                 continue
 
-            self._current_folder = None
         return folders
 
     async def get_folder_emails(self, folder: str, limit: int = 20, offset: int = 0, from_date: Optional[datetime] = None, to_date: Optional[datetime] = None) -> List[EmailSummary]:
