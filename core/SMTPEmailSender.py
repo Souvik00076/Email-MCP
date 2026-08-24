@@ -66,6 +66,18 @@ class SMTPEmailSender(EmailSenderStrategy):
         if email.cc:
             msg["Cc"] = ", ".join(email.cc)
 
+        # Threading headers. In-Reply-To names the immediate parent; References
+        # carries the whole ancestry and is what clients actually walk to group
+        # a thread, so a missing chain is backfilled from the parent alone.
+        if email.in_reply_to:
+            msg["In-Reply-To"] = email.in_reply_to
+            references = email.references or email.in_reply_to
+            if email.in_reply_to not in references.split():
+                references = f"{references} {email.in_reply_to}"
+            msg["References"] = references
+        elif email.references:
+            msg["References"] = email.references
+
         msg.attach(MIMEText(email.body, "plain"))
 
         # BCC goes in recipient list only — never in headers

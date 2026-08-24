@@ -239,6 +239,18 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
         date = self._parse_date(msg.get("Date", ""))
         return subject, from_name, from_address, to_address, date
 
+    @staticmethod
+    def _normalize_header(value: Optional[str]) -> Optional[str]:
+        """Collapse a folded header into a single line.
+
+        Long headers (notably References, which grows by one msg-id per hop)
+        arrive wrapped across lines with leading whitespace. Angle brackets are
+        kept — <...> is the form In-Reply-To/References use on the wire.
+        """
+        if not value:
+            return None
+        return " ".join(value.split()) or None
+
     def _build_search_criteria(
         self,
         unread_only: bool = False,
@@ -342,6 +354,7 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
                     date=date,
                     preview=preview,
                     is_read=is_read,
+                    message_id=self._normalize_header(msg.get("Message-ID")),
                     has_attachments=self._has_attachments(msg),
                     folder=folder
                 ))
@@ -415,7 +428,11 @@ class IMAPEmailReceiver(EmailReceiverStrategy):
                 is_read=is_read,
                 has_attachments=self._has_attachments(msg),
                 attachment_names=self._get_attachment_names(msg) or None,
-                folder=folder
+                folder=folder,
+                message_id=self._normalize_header(msg.get("Message-ID")),
+                in_reply_to=self._normalize_header(msg.get("In-Reply-To")),
+                references=self._normalize_header(msg.get("References")),
+                reply_to=self._normalize_header(msg.get("Reply-To")),
             )
         except Exception as e:
             raise Exception(f"Failed to fetch email: {str(e)}")

@@ -10,6 +10,13 @@ class EmailMessage(BaseModel):
     body: str
     cc: Optional[List[EmailStr]] = None
     bcc: Optional[List[EmailStr]] = None
+    # Threading (RFC 5322 §3.6.4). Set both to make this message appear as a
+    # reply in the recipient's client: in_reply_to is the parent's Message-ID,
+    # references is the parent's own References chain plus that Message-ID.
+    # Values are wire-format msg-ids including angle brackets, e.g. "<a@b>";
+    # references holds them space-separated, oldest first.
+    in_reply_to: Optional[str] = None
+    references: Optional[str] = None
 
 
 class EmailSenderStrategy(ABC):

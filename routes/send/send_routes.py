@@ -20,6 +20,24 @@ class EmailRequest(BaseModel):
     body: str = Field(..., description="Email body content")
     cc: Optional[List[EmailStr]] = Field(None, description="CC recipients")
     bcc: Optional[List[EmailStr]] = Field(None, description="BCC recipients")
+    in_reply_to: Optional[str] = Field(
+        None,
+        description=(
+            "Message-ID of the message being replied to, angle brackets "
+            "included (e.g. '<abc@mail.gmail.com>'). Read it from the "
+            "message_id field of a fetched email. Makes this send appear "
+            "inside that thread instead of starting a new one."
+        )
+    )
+    references: Optional[str] = Field(
+        None,
+        description=(
+            "Ancestry chain for the thread: the parent's own references "
+            "value, space-separated, oldest first. Omit and it is derived "
+            "from in_reply_to alone, which threads correctly for a reply to "
+            "the first message but may fragment deeper threads."
+        )
+    )
 
 
 class EmailResponse(BaseModel):
@@ -43,7 +61,9 @@ async def send_email(email: EmailRequest, user_info: AuthDep):
             subject=email.subject,
             body=email.body,
             cc=email.cc,
-            bcc=email.bcc
+            bcc=email.bcc,
+            in_reply_to=email.in_reply_to,
+            references=email.references
         )
         email_sender: EmailSenderStrategy = SMTPEmailSender(
             user_info.token, user_info.email)
