@@ -16,6 +16,10 @@ class EmailSummary(BaseModel):
     is_read: bool
     has_attachments: bool
     folder: str
+    # RFC 5322 identity of this message, e.g. "<abc@mail.gmail.com>". Carried on
+    # summaries so a reply can be composed straight off a list result without a
+    # second fetch.
+    message_id: Optional[str] = None
 
 
 class EmailDetail(BaseModel):
@@ -33,6 +37,15 @@ class EmailDetail(BaseModel):
     has_attachments: bool
     attachment_names: Optional[List[str]] = None
     folder: str
+    # Threading headers (RFC 5322 §3.6.4). message_id identifies this message;
+    # in_reply_to/references point back at its ancestors. To reply to this
+    # message, send with in_reply_to=message_id and
+    # references=(references or in_reply_to) + " " + message_id.
+    message_id: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    references: Optional[str] = None
+    # When present, overrides From as the intended destination for replies.
+    reply_to: Optional[str] = None
 
 
 class FolderInfo(BaseModel):
